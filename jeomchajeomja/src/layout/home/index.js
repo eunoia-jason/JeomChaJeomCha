@@ -3,7 +3,6 @@ import styled from "styled-components";
 import NavBar from "../../common/NavBar";
 import { Button } from "./components/Button";
 import Search from "./components/Search";
-import TtsTest from "../ttsTest";
 import { Link, useNavigate } from "react-router-dom";
 import { SearchContext } from "../../model/SearchProvider";
 import SpeechRecognition, {
@@ -26,12 +25,31 @@ function Home() {
     useSpeechRecognition();
 
   useEffect(() => {
+    let startTimer;
+
     const handleKeyDown = (event) => {
-      // event.preventDefault();
-      if (event.key === " " && !isListening) {
-        playBeep();
-        setIsListening(true);
-        SpeechRecognition.startListening();
+      if (event.key === " " && !isListening && !startTimer) {
+        // 스페이스바 누른 상태로 0.2초를 누르면 딱 작동
+        startTimer = setTimeout(() => {
+          playBeep();
+          setIsListening(true);
+          SpeechRecognition.startListening();
+          startTimer = null; // 타이머 초기화
+        }, 200);
+      }
+    };
+
+    const handleKeyUp = (event) => {
+      if (event.key === " ") {
+        // 스페이스바를 뗄 때 타이머 취소 => 입력 정상작동
+        if (startTimer) {
+          clearTimeout(startTimer);
+          startTimer = null;
+        }
+        if (isListening) {
+          setIsListening(false);
+          SpeechRecognition.stopListening();
+        }
       }
     };
 
@@ -45,21 +63,27 @@ function Home() {
       oscillator.stop(audioContext.currentTime + 0.6);
     };
 
-    const handleKeyUp = (event) => {
-      if (event.key === " " && isListening) {
-        setIsListening(false);
-        SpeechRecognition.stopListening();
-      }
-    };
-
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      if (startTimer) {
+        clearTimeout(startTimer); // 컴포넌트 언마운트 시 타이머 취소
+      }
     };
   }, [isListening]);
+
+  useEffect(() => {
+    if (transcript && !isListening) {
+      const speech = new SpeechSynthesisUtterance();
+      speech.lang = "ko-KR";
+      speech.text = transcript;
+      window.speechSynthesis.speak(speech);
+      console.log(transcript);
+    }
+  }, [transcript, isListening]);
 
   if (!browserSupportsSpeechRecognition) {
     return (
@@ -80,13 +104,6 @@ function Home() {
           <Body>해당 학년 혹은 교재명과 같은 키워드를 입력해주세요.</Body>
         </Row>
         <Body>스페이스바를 누르는 동안 음성 검색이 활성화됩니다.</Body>
-        <div>
-          {/* <p>
-            Microphone: {isListening ? <LoadingAnimation /> : "off"}
-          </p> */}
-          <button onClick={resetTranscript}>Reset</button>
-          <p>{transcript}</p>
-        </div>
         <Search transcript={transcript} isListening={isListening} />
         <Space />
         <Header>키워드 검색</Header>
@@ -104,7 +121,6 @@ function Home() {
             </Link>
           ))}
         </ButtonContainer>
-        <TtsTest />
       </Div>
     </>
   );
